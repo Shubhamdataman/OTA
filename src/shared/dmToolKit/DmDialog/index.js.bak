@@ -1,0 +1,490 @@
+import { DataGrid } from '@mui/x-data-grid';
+import React, { useEffect, useState } from 'react';
+import DmBox from '../DmBox';
+import DmTextfield from '../DmTextfield';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import CheckIcon from '@mui/icons-material/Check';
+
+function DmDialog({
+  open,
+  onClose,
+  searchColumns,
+  onSelect,
+  isMobile,
+  dialogTitle,
+  specificColumn,
+  sortfield,
+  isSelect,
+  fetchRows,
+  triggerElement,
+  position = 'center', // 'center' or 'bottom',
+  getRowId = (row) => row.id, // Default row ID function
+  getRowIdentifier = (row) => row.id, // New prop for selection identifier,
+  selectedItems,
+  selectedIdentifierName
+}) {
+  const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(5); // Increased default page size for compactness
+  const [rowCount, setRowCount] = useState(0);
+
+  const [searchText, setSearchText] = useState('');
+  const [selectedHeader, setSelectedHeader] = useState(sortfield);
+  const [selectionModel, setSelectionModel] = useState([]);
+  const [selectedRowsMap, setSelectedRowsMap] = useState({});
+
+  // Calculate dynamic width based on number of columns
+  const columnCount = searchColumns.length + (isSelect ? 1 : 0);
+  const dialogWidth = Math.min(800, Math.max(400, columnCount * 120)); // Adjust min/max width as needed
+
+
+    const columns = [
+    ...(isSelect
+      ? [
+          {
+            field: 'select',
+            headerName: '',
+            width: 50,
+            sortable: false,
+            filterable: false,
+            disableColumnMenu: true,
+            renderHeader: (params) => {
+            const allSelected = selectionModel.length > 0 && 
+                              selectionModel.length === rows.length;
+            return (
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // Select all visible rows
+                    const newSelection = rows.map(row => getRowIdentifier(row));
+                    setSelectionModel(newSelection);
+                    setSelectedRowsMap(
+                      rows.reduce((acc, row) => {
+                        acc[getRowIdentifier(row)] = row;
+                        return acc;
+                      }, {})
+                    );
+                  } else {
+                    // Clear all selections
+                    setSelectionModel([]);
+                    setSelectedRowsMap({});
+                  }
+                }}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  cursor: 'pointer',
+                }}
+              />
+            );
+          },
+            renderCell: (params) => {
+              const rowId = getRowIdentifier(params.row);
+              return (
+                <input
+                  type="checkbox"
+                  checked={selectionModel.includes(rowId)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectionModel((prev) => [...prev, rowId]);
+                      setSelectedRowsMap((prev) => ({
+                        ...prev,
+                        [rowId]: params.row,
+                      }));
+                    } else {
+                      setSelectionModel((prev) =>
+                        prev.filter((item) => item !== rowId)
+                      );
+                      setSelectedRowsMap((prev) => {
+                        const updated = { ...prev };
+                        delete updated[rowId];
+                        return updated;
+                      });
+                    }
+                  }}
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    cursor: 'pointer',
+                  }}
+                />
+              );
+            },
+          },
+        ]
+      : []),
+    ...searchColumns.map((col) => ({
+      ...col,
+      width: col.width || 120,
+      headerClassName: col.field === selectedHeader ? 'selected-header' : '',
+      cellClassName: 'compact-cell',
+    })),
+  ];
+
+  
+
+
+  // Initialize selection when dialog opens or selectedItems changes
+  useEffect(() => {
+    if (open) {
+      // Convert selectedItems to a map of identifiers to rows
+      const initialSelectedMap = {};
+      const initialSelectionModel = [];
+      
+      selectedItems.forEach(item => {
+        const identifier = getRowIdentifier(item);
+        initialSelectedMap[identifier] = item;
+        initialSelectionModel.push(identifier);
+      });
+      
+      setSelectedRowsMap(initialSelectedMap);
+      setSelectionModel(initialSelectionModel);
+    }
+  }, [open, selectedItems, getRowIdentifier]);
+
+  // When new rows are loaded, ensure selected items are preserved
+  useEffect(() => {
+    if (open && rows.length > 0) {
+      // Check if any newly loaded rows are in the selection model
+      const newSelectedRowsMap = { ...selectedRowsMap };
+      let changed = false;
+      
+      rows.forEach(row => {
+        const rowId = getRowIdentifier(row);
+        if (selectionModel.includes(rowId)) {
+          newSelectedRowsMap[rowId] = row;
+          changed = true;
+        }
+      });
+      
+      if (changed) {
+        setSelectedRowsMap(newSelectedRowsMap);
+      }
+    }
+  }, [rows, open]);
+  useEffect(() => {
+    if (open) {
+      loadData();
+    }
+  }, [searchText, page, pageSize, open]);
+
+  useEffect(() => {
+    if (open) {
+      setPage(0);
+    }
+  }, [open]);
+
+  const loadData = async () => {
+    if (!fetchRows) return;
+
+    try {
+      const payload = {
+        sort: [{ field: sortfield, order: 'asc' }],
+        filters: [
+          {
+            field: selectedHeader,
+            value: searchText,
+            operator: 'beginswith',
+            datatype: selectedHeader === specificColumn ? 'date' : 'string',
+          },
+        ],
+        page: page,
+        size: pageSize,
+      };
+
+      const response = await fetchRows(payload);
+      setRows(response?.data || []);
+      setRowCount(response?.totalCount || 0);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  };
+
+  const handleColumnHeaderClick = (params) => {
+    setSelectedHeader(params.colDef.field);
+  };
+
+  const handleSelectClick = () => {
+    if (selectionModel.length > 0) {
+      const selectedRows = selectionModel.map((id) => selectedRowsMap[id]);
+      onSelect(selectedRows);
+      handleClose();
+    }else{
+      onSelect([]);
+      handleClose();
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+    setSelectionModel([]);
+    setSelectedRowsMap({});
+    setSearchText('');
+  };
+
+  const handleRowClick = (params) => {
+    if (!isSelect) {
+      onSelect([params.row]);
+      handleClose();
+    }
+  };
+
+  const selectedIdentifiers = Object.values(selectedRowsMap).map(
+    (row) => row[selectedIdentifierName || 'name']
+  );
+
+  return (
+    <>
+      {triggerElement}
+
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        fullWidth
+        maxWidth={false} // Disable maxWidth constraint
+        sx={{
+          '& .MuiDialog-paper': {
+            width: `${dialogWidth}px`,
+            maxWidth: '95vw', // Ensure it doesn't exceed viewport
+          },
+          ...(position === 'bottom' && {
+            '& .MuiDialog-container': {
+              alignItems: 'flex-end',
+            },
+            '& .MuiPaper-root': {
+              margin: 0,
+              width: '100%',
+              maxHeight: '80vh',
+            },
+          }),
+        }}
+      >
+        <DialogTitle
+          sx={{
+            padding: '8px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontWeight: 600,
+          }}
+        >
+          {dialogTitle}
+          <Box>
+            <IconButton onClick={handleSelectClick} color="primary">
+              <CheckIcon />
+            </IconButton>
+            <IconButton onClick={handleClose} color="error">
+              <CloseIcon />
+            </IconButton>
+            
+          </Box>
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            backgroundColor: 'background.default',
+            p: '20px 24px !important',
+            boxShadow: 'inset 0px 0px 5px #ccc',
+            borderRadius: '4px',
+          }}
+        >
+          <DmTextfield
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder={`Search ${dialogTitle}...`}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              mb: 1,
+              '& .MuiInputBase-root': {
+                height: '36px',
+              },
+            }}
+          />
+
+          <div style={{ height: 300, width: '100%' }}>
+            <DataGrid
+              rows={rows}
+              columns={columns}
+              getRowId={getRowId}
+              pagination
+              paginationModel={{ page, pageSize }}
+              onPaginationModelChange={(model) => {
+                if (model.pageSize !== pageSize) {
+                  setPage(0);
+                  setPageSize(model.pageSize);
+                } else {
+                  setPage(model.page);
+                }
+              }}
+              paginationMode="server"
+              rowCount={rowCount}
+              pageSizeOptions={[5, 10, 20]}
+              rowHeight={40}
+              columnHeaderHeight={35}
+              getRowClassName={(params) => {
+                return params.indexRelativeToCurrentPage % 2 === 0
+                  ? 'even-row'
+                  : 'odd-row';
+              }}
+              onColumnHeaderClick={handleColumnHeaderClick}
+              onRowClick={({ row }) => handleRowClick({ row })}
+              sx={{
+                borderTop: 'none',
+                borderRight: 'none',
+                borderLeft: 'none',
+                borderRadius: 0,
+                '& .MuiDataGrid-columnHeaders': {
+                  borderBottom: '1px solid #ccc',
+                },
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 'bold',
+                  fontSize: 10,
+                  color: 'primary.main',
+                },
+                '& .MuiDataGrid-cell': {
+                  fontSize: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderColor: 'transparent !important',
+                  cursor: 'pointer',
+                },
+                '& .MuiDataGrid-row:hover': {
+                  backgroundColor: '#F2F6F7',
+                },
+                '& .even-row': {
+                  backgroundColor: '#fff',
+                },
+                '& .odd-row': {
+                  backgroundColor: '#fbfbfb',
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  minHeight: 32,
+                  height: 32,
+                  fontSize: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  overflow: 'hidden',
+                },
+                '& .MuiTablePagination-root': {
+                  fontSize: 10,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  padding: 0,
+                  overflow: 'hidden',
+                },
+                '& .MuiTablePagination-toolbar': {
+                  height: '100%',
+                  fontSize: 6,
+                  minHeight: 'unset',
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                },
+                '& .MuiTablePagination-displayedRows, & .MuiTablePagination-selectLabel':
+                  {
+                    fontSize: 10,
+                  },
+                '& .MuiTablePagination-select': {
+                  fontSize: 10,
+                  padding: '0px 8px !important',
+                  minHeight: '10px',
+                  mr: '6px',
+                  ml: '-10px',
+                },
+                '& .MuiTablePagination-actions': {
+                  ml: 0,
+                },
+
+                '& .MuiSvgIcon-root': {
+                  fontSize: 14,
+                },
+                '& .MuiDataGrid-columnSeparator': {
+                  display: 'none !important',
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  borderRight: 'none !important',
+                },
+                '& .selected-header': {
+                  backgroundColor: '#E4DDDD',
+                  fontWeight: 'bold',
+                },
+                '& .MuiDataGrid-columnHeader--select .MuiDataGrid-columnHeaderTitleContainer':
+                  {
+                    justifyContent: 'center',
+                  },
+              }}
+              disableColumnFilter
+              disableColumnMenu
+              disableColumnSelector
+              disableColumnResize
+              disableColumnSorting
+              disableRowSelectionOnClick
+            />
+          </div>
+
+          {isSelect && selectedIdentifiers.length > 0 && (
+            <DmBox
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                my: 1,
+                flexWrap: 'wrap',
+                gap: 0.5,
+                maxHeight: '60px',
+                overflow: 'auto',
+              }}
+            >
+              {selectedIdentifiers.map((identifier, index) => (
+                <Chip
+                  key={index}
+                  label={identifier}
+                  size="small"
+                  sx={{
+                    backgroundColor: '#e2635b',
+                    color: 'white',
+                    fontSize: '0.6rem',
+                    height: '24px',
+                  }}
+                />
+              ))}
+            </DmBox>
+          )}
+        </DialogContent>
+
+        {/* <DialogActions sx={{ pt: 0 }}>
+          <Button onClick={handleClose}>Cancel</Button>
+
+          {isSelect && (
+            <Button
+              onClick={handleSelectClick}
+              // disabled={selectionModel.length === 0}
+            >
+              Ok
+            </Button>
+          )}
+        </DialogActions> */}
+      </Dialog>
+    </>
+  );
+}
+
+export default DmDialog;

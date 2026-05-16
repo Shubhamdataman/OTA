@@ -1,0 +1,12 @@
+import { Card } from '@mui/material'
+import React from 'react'
+
+function DmCard({sx, children}) {
+  return (
+    <Card sx={sx}>
+        {children}
+    </Card>
+  )
+}
+
+export default DmCard

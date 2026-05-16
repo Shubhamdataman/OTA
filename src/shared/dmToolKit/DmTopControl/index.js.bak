@@ -1,0 +1,256 @@
+import {
+  AppBar,
+  Box,
+  Menu,
+  MenuItem,
+  Toolbar,
+  Typography,
+  useMediaQuery,
+} from '@mui/material';
+import IconButton from '@mui/material/IconButton';
+import MoreIcon from '@mui/icons-material/MoreVert';
+import SaveIcon from '@mui/icons-material/Save';
+import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import AddIcon from '@mui/icons-material/Add';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PrintIcon from '@mui/icons-material/Print';
+import ShareIcon from '@mui/icons-material/Share';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useEffect, useState } from 'react';
+
+function DmTopControl({
+  formName,
+  permission = 'AEDPVS', // Default permissions if not provided
+  isDocId,
+  isFormData,
+  onAdd,
+  OnEdit,
+  onClose,
+  onSave,
+  onDelete,
+  onRefresh,
+  onPrint,
+  onShare,
+  onOther,
+  onSearch,
+}) {
+  const isMobile = useMediaQuery('(max-width:600px)');
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [filteredOptions, setFilteredOptions] = useState([]);
+  const [alwaysVisibleActions, setAlwaysVisibleActions] = useState([]);
+  const open = Boolean(anchorEl);
+
+  const handleMenuClick = (e) => {
+    setAnchorEl(e.currentTarget);
+  };
+  const handleMenuClose = () => setAnchorEl(null);
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const iconStyles = {
+    '& svg': { color: '#fff', transition: '0.2s' },
+  };
+
+  // All possible actions with their conditions
+  const allActions = [
+    // Always visible outside menu
+    {
+      id: 'refresh',
+      code: 'R',
+      name: 'Refresh',
+      icon: <RefreshIcon fontSize="small" />,
+      action: onRefresh,
+      alwaysVisible: false,
+      requiresFormData: true,
+      insideMenu: false,
+    },
+    {
+      id: 'close',
+      code: 'C',
+      name: 'Close',
+      icon: <CloseIcon fontSize="small" />,
+      action: onClose,
+      alwaysVisible: true,
+      requiresFormData: false,
+      insideMenu: false,
+    },
+
+    // Menu items
+    {
+      id: 'add',
+      code: 'A',
+      name: 'Add',
+      icon: <AddIcon fontSize="small" />,
+      action: onAdd,
+      requiresFormData: false,
+      priority: 1,
+      insideMenu: true,
+    },
+    {
+      id: 'search',
+      code: 'S',
+      name: 'Search',
+      icon: <SearchIcon fontSize="small" />,
+      alwaysVisible: false,
+      insideMenu: true,
+      action: onSearch,
+      requiresFormData: false,
+      priority: 2,
+    },
+    {
+      id: 'edit',
+      code: 'E',
+      name: 'Edit',
+      icon: <EditNoteIcon fontSize="small" />,
+      action: OnEdit,
+      requiresFormData: true,
+      priority: 3,
+      insideMenu: true,
+    },
+    {
+      id: 'delete',
+      code: 'D',
+      name: 'Delete',
+      icon: <DeleteIcon fontSize="small" />,
+      action: onDelete,
+      requiresFormData: true,
+      priority: 4,
+      insideMenu: true,
+    },
+    {
+      id: 'print',
+      code: 'P',
+      name: 'Print',
+      icon: <PrintIcon fontSize="small" />,
+      action: onPrint,
+      requiresFormData: true,
+      priority: 5,
+      insideMenu: true,
+    },
+    {
+      id: 'save',
+      code: 'V',
+      name: 'Save',
+      icon: <SaveIcon fontSize="small" />,
+      action: onSave,
+      requiresFormData: true,
+      priority: 6,
+      insideMenu: true,
+    },
+  ];
+
+  useEffect(() => {
+    // Filter actions based on permissions, form data state, and priority
+    const filtered = allActions.filter((action) => {
+      // Check if user has permission for this action
+      const hasPermission =
+        action?.id !== 'edit'
+          ? action?.id !== 'print'
+            ? permission.includes(action.code) || action.insideMenu
+            : permission.includes(action.code)
+          : permission.includes(action.code) && isDocId;
+      // if (action.id === 'print') 
+      //   console.log('print', hasPermission);
+      // Check if action is valid for current form state
+      const validForFormState = isFormData ? true : !action.requiresFormData;
+      // console.log('action - -', action, hasPermission && validForFormState);
+      return hasPermission && validForFormState;
+    });
+
+    // Separate always visible actions from menu items
+    const alwaysVisible = allActions.filter(
+      (action) => action.alwaysVisible && !action.insideMenu
+    );
+    const outsideMenu = allActions.filter((action) =>
+      isFormData ? !action.insideMenu && action.id === 'refresh' : false
+    );
+    // console.log('alwaysVisible', alwaysVisible);
+    const menuItems = filtered
+      .filter((action) => !action.alwaysVisible)
+      .sort((a, b) => a.priority - b.priority);
+
+    // Save always visible actions in state (for rendering outside menu)
+    setAlwaysVisibleActions([...alwaysVisible, ...outsideMenu]);
+    setFilteredOptions(menuItems);
+  }, [isFormData, permission, isDocId]);
+
+  return (
+    <AppBar position="static"
+      sx={{
+        backgroundColor: 'background.default !important',
+        borderRadius: '16px',
+        boxShadow: 2,
+        backgroundImage: 'none !important',
+        color: '#fff',
+      }}
+    >
+      <Toolbar variant="dense">
+        <Typography
+          className="dmTopControlFormTitle"
+          sx={{ fontWeight: 900, fontSize: 16 }}
+        >
+          {formName}
+        </Typography>
+        <Box ml="auto" className="dmTopControlContainer">
+          {/* Always visible actions */}
+          {alwaysVisibleActions.map((action) => (
+            <IconButton
+              key={action.id}
+              onClick={action.action}
+              sx={iconStyles}
+            // disabled={action.requiresFormData && !isFormData}
+            >
+              {action.icon}
+            </IconButton>
+          ))}
+
+          {/* Menu button (contains other actions) */}
+          {filteredOptions.length > 0 && (
+            <>
+              <IconButton
+                edge="end"
+                id="basic-button"
+                aria-permission={open ? 'basic-menu' : undefined}
+                aria-haspopup="true"
+                aria-expanded={open ? 'true' : undefined}
+                onClick={handleMenuClick}
+                sx={iconStyles}
+              >
+                <MoreIcon fontSize="small" />
+              </IconButton>
+
+              {/* Dropdown menu */}
+              <Menu
+                id="basic-menu"
+                anchorEl={anchorEl}
+                open={open}
+                onClose={handleClose}
+                MenuListProps={{
+                  'aria-labelledby': 'basic-button',
+                }}
+                sx={{ ml: isMobile ? -2 : -6 }}
+              >
+                {filteredOptions.map((option) => (
+                  <MenuItem
+                    key={option.id}
+                    onClick={() => {
+                      handleClose();
+                      option.action();
+                    }}
+                  >
+                    {option?.icon} &nbsp; {option?.name}
+                  </MenuItem>
+                ))}
+              </Menu>
+            </>
+          )}
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
+}
+
+export default DmTopControl; 

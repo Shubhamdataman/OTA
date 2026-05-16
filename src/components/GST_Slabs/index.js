@@ -1,0 +1,1 @@
+export const gstRates = {'slab1': 0.05, 'slab2': 0.18};

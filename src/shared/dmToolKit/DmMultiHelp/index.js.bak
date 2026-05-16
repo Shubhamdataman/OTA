@@ -1,0 +1,436 @@
+import { DataGrid } from '@mui/x-data-grid';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
+import SearchIcon from '@mui/icons-material/Search';
+import {
+  InputAdornment,
+  IconButton,
+  Box,
+  Typography,
+  Chip,
+  Button,
+  CircularProgress,
+} from '@mui/material';
+import DmTextfield from '../DmTextfield';
+
+const DmMultiHelp = ({
+  value,
+  setValue,
+  label,
+  required,
+  columns,
+  setSelectedRow,
+  fetchRows,
+  disabled,
+  sx,
+  isSelect = false,
+  sortfield,
+  specificColumn,
+  multiple = false,
+  error,
+  getRowId = (row) => row.recId || row.code || row.id,
+  clickableLabel = false,
+  loading,
+
+  onLabelClick = () => {},
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [fetchedRows, setFetchedRows] = useState([]);
+  // const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [selectedHeader, setSelectedHeader] = useState(sortfield);
+  const [page, setPage] = useState(0);
+  const [rowCount, setRowCount] = useState(0);
+  const [selectionModel, setSelectionModel] = useState([]);
+  const [selectedRowsMap, setSelectedRowsMap] = useState({});
+  const [pageSize, setPageSize] = useState(5);
+
+  const containerRef = useRef(null);
+  const dataGridRef = useRef(null);
+
+  const enhancedColumns = [
+    ...(isSelect
+      ? [
+          {
+            field: 'select',
+            headerName: '',
+            width: 50,
+            sortable: false,
+            filterable: false,
+            disableColumnMenu: true,
+            renderCell: (params) => (
+              <input
+                type="checkbox"
+                checked={selectionModel.includes(params.row.recId)}
+                onChange={(e) => {
+                  const recId = params.row.recId;
+                  if (e.target.checked) {
+                    setSelectionModel((prev) => [...prev, recId]);
+                    setSelectedRowsMap((prev) => ({
+                      ...prev,
+                      [recId]: params.row,
+                    }));
+                  } else {
+                    setSelectionModel((prev) =>
+                      prev.filter((id) => id !== recId)
+                    );
+                    setSelectedRowsMap((prev) => {
+                      const updated = { ...prev };
+                      delete updated[recId];
+                      return updated;
+                    });
+                  }
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...columns.map((col) => ({
+      ...col,
+      headerClassName: col.field === selectedHeader ? 'selected-header' : '',
+    })),
+  ];
+
+  // useEffect(() => {
+  //   // setLoading(true);
+  //   if(!disabled) {
+  //   loadData();
+  // }
+
+  // }, [searchText, page, pageSize]);
+
+  const loadData = async () => {
+    try {
+      const payload = {
+        sort: [{ field: sortfield, order: 'asc' }],
+        filters: [
+          {
+            field: selectedHeader || specificColumn,
+            value: searchText,
+            operator: 'beginswith',
+            datatype: 'string',
+          },
+        ],
+        page,
+        size: pageSize,
+      };
+
+      const response = await fetchRows(payload);
+      setFetchedRows(response?.data || []);
+      setRowCount(response?.totalCount || 0);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && !disabled) {
+      loadData();
+    }
+  }, [isOpen, searchText, page, pageSize]);
+
+  const ignoreClickOutside = useRef(false);
+
+  useEffect(() => {
+    if (ignoreClickOutside.current) return;
+    const handleClickOutside = (event) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleColumnHeaderClick = (params) => {
+    setSelectedHeader(params.colDef.field);
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchText(e.target.value);
+    setPage(0);
+  };
+
+  const handleRowClick = (params) => {
+    if (!isSelect) {
+      setValue(params.row);
+      setSelectedRow(params.row);
+      setSearchText(""); // <- update here
+      setIsOpen(false);
+    }
+  };
+
+  const handleSelectClick = () => {
+    if (selectionModel.length > 0) {
+      const selectedRows = selectionModel.map((id) => selectedRowsMap[id]);
+      setValue(multiple ? selectedRows : selectedRows[0]);
+      if (setSelectedRow) {
+        setSelectedRow(multiple ? selectedRows : selectedRows[0]);
+      }
+      setIsOpen(false);
+      setSelectionModel([]);
+      setSelectedRowsMap({});
+    }
+  };
+
+  const getDisplayValue = () => {
+    if (!value) return '';
+    if (Array.isArray(value)) {
+      return value
+        .map((v) => v[specificColumn || columns[0]?.field])
+        .join(', ');
+    }
+    return value[specificColumn || columns[0]?.field];
+    // return;
+  };
+
+  // Get selected values for chips display
+  const selectedValues = Array.isArray(value)
+    ? value.map((v) => v[specificColumn || columns[0]?.field])
+    : value
+    ? [value[specificColumn || columns[0]?.field]]
+    : [];
+
+  return (
+    <Box ref={containerRef} sx={{ position: 'relative', ...sx }}>
+      <DmTextfield
+        label={
+          clickableLabel ? (
+            <Typography
+              component="label"
+              htmlFor={label.replace(/\s+/g, '-').toLowerCase()}
+              onClick={onLabelClick}
+              sx={{
+                color:
+                  clickableLabel && !disabled ? 'blue' : 'text.primary',
+                cursor: clickableLabel && !disabled ? 'pointer' : 'default',
+                mb: 0.5,
+                fontSize: '0.875rem',
+                fontWeight: 'medium',
+                '&:hover': {
+                  color:
+                    clickableLabel && !disabled
+                      ? 'blue'
+                      : 'text.primary',
+                },
+              }}
+            >
+              {label}
+              {required && <span style={{ color: 'red' }}>*</span>}
+            </Typography>
+          ) : (
+            <>
+              {label}
+              {required && <span style={{ color: 'red' }}>*</span>}
+            </>
+          )
+        }
+        required={required}
+        value={isOpen ? searchText : getDisplayValue()}
+        onChange={handleSearchChange}
+        onClick={() => !disabled && setIsOpen(true)}
+        size="small"
+        fullWidth
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchIcon />
+            </InputAdornment>
+          ),
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!disabled) setIsOpen(!isOpen);
+                }}
+                edge="end"
+              >
+                {isOpen ? <ArrowDropUpIcon /> : <ArrowDropDownIcon />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+        disabled={disabled}
+        error={!!error}
+      />
+
+      {isOpen && (
+        <Box
+          ref={dataGridRef}
+          sx={{
+            position: 'absolute',
+            zIndex: 1300,
+            minWidth: '100%',
+            maxWidth: '95vw',
+            bgcolor: 'background.paper',
+            boxShadow: 3,
+            borderRadius: 1,
+            maxHeight: '400px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+          }}
+        >
+          {loading && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                zIndex: 1,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none', // Allow interactions through
+                background: 'transparent', // Don't fade/blur content
+              }}
+            >
+              <CircularProgress size={40} />
+            </Box>
+          )}
+          <Box sx={{ pt: 0 }}>
+            <DataGrid
+              columns={enhancedColumns}
+              rows={fetchedRows}
+              getRowId={getRowId}
+              loading={loading}
+              pagination
+              paginationModel={{ page, pageSize }}
+              columnVisibilityModel={{
+                code: false,
+              }}
+              onPaginationModelChange={(model) => {
+                if (model.pageSize !== pageSize) {
+                  setPage(0);
+                  setPageSize(model.pageSize);
+                } else {
+                  setPage(model.page);
+                }
+              }}
+              paginationMode="server"
+              rowCount={rowCount}
+              pageSizeOptions={[5, 10, 15]}
+              onColumnHeaderClick={handleColumnHeaderClick}
+              rowHeight={40}
+              columnHeaderHeight={35}
+              onRowClick={({ row }) => handleRowClick({ row })}
+              sx={{
+                borderTop: 'none',
+                borderRight: 'none',
+                borderLeft: 'none',
+                borderRadius: 0,
+                '& .MuiDataGrid-columnHeader': {
+                  borderBottom: '1px solid #ccc',
+                  bgcolor: 'primary.main',
+                  color: 'text.secondary',
+                },
+                '& .MuiDataGrid-columnHeaderTitle': {
+                  fontWeight: 'bold',
+                  fontSize: 10,
+                },
+                '& .selected-header': {
+                  backgroundColor: '#455E57',
+                },
+                '& .MuiDataGrid-cell': {
+                  fontSize: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderColor: 'transparent !important',
+                  cursor: 'pointer',
+                },
+                '& .MuiDataGrid-row:hover': {
+                  backgroundColor: '#F2F6F7',
+                },
+                '& .even-row': {
+                  backgroundColor: '#fff',
+                },
+                '& .odd-row': {
+                  backgroundColor: '#fbfbfb',
+                },
+                '& .MuiDataGrid-footerContainer': {
+                  minHeight: 32,
+                  height: 32,
+                  fontSize: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  overflow: 'hidden',
+                },
+                '& .MuiTablePagination-root': {
+                  fontSize: 10,
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  padding: 0,
+                  overflow: 'hidden',
+                },
+                '& .MuiTablePagination-toolbar': {
+                  height: '100%',
+                  fontSize: 6,
+                  minHeight: 'unset',
+                  paddingTop: 0,
+                  paddingBottom: 0,
+                },
+                '& .MuiTablePagination-displayedRows, & .MuiTablePagination-selectLabel':
+                  {
+                    fontSize: 10,
+                  },
+                '& .MuiTablePagination-select': {
+                  fontSize: 10,
+                  padding: '0px 8px !important',
+                  minHeight: '10px',
+                  mr: '6px',
+                  ml: '-10px',
+                },
+                '& .MuiTablePagination-actions': {
+                  ml: 0,
+                },
+                '& .MuiSvgIcon-root': {
+                  fontSize: 14,
+                },
+                '& .MuiDataGrid-columnSeparator': {
+                  display: 'none !important',
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  borderRight: 'none !important',
+                },
+              }}
+              disableColumnFilter
+              disableColumnMenu
+              disableColumnSelector
+              disableColumnResize
+              disableColumnSorting
+              disableRowSelectionOnClick
+            />
+          </Box>
+
+          {isSelect && (
+            <Box sx={{ display: 'flex', alignItems: 'center', p: 2, pt: 0 }}>
+              <Button
+                variant="contained"
+                onClick={handleSelectClick}
+                disabled={selectionModel.length === 0}
+                sx={{
+                  backgroundColor: '#e2635b',
+                  '&:hover': { backgroundColor: '#a64039' },
+                }}
+              >
+                Select ({selectionModel.length})
+              </Button>
+            </Box>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
+export default DmMultiHelp;

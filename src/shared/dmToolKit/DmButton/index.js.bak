@@ -1,0 +1,55 @@
+import { Button } from "@mui/material";
+import React from "react";
+
+function DmButton({
+  variant,
+  fullWidth,
+  sx,
+  type,
+  onClick,
+  size,
+  children,
+  disabled,
+}) {
+  return (
+    <Button
+      variant={variant}
+      fullWidth={true}
+      sx={{
+        borderRadius: 2,
+        textTransform: 'none',
+        fontWeight: 500,
+        letterSpacing: 0.4,
+        padding:
+          size === 'small'
+            ? '4px 12px'
+            : size === 'large'
+            ? '10px 24px'
+            : '6px 16px',
+        transition: 'all 0.2s ease-in-out',
+        color: 'text.ternary',
+        backgroundColor: 'primary.main',
+        '&:hover': {
+          backgroundColor: 'background.light',
+        },
+        '&:active': {
+          transform: 'scale(0.98)',
+        },
+        '&.Mui-disabled': {
+          backgroundColor: 'primary.main',
+          color: 'text.disabled',
+          cursor: 'not-allowed',
+        },
+        ...sx,
+      }}
+      type={type}
+      onClick={onClick}
+      size={size}
+      disabled={disabled}
+    >
+      {children}
+    </Button>
+  );
+}
+
+export default DmButton;

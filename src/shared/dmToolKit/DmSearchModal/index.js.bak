@@ -1,0 +1,351 @@
+import { DataGrid } from '@mui/x-data-grid';
+import { useEffect, useState } from 'react';
+import DmBox from '../DmBox';
+import DmTextfield from '../DmTextfield';
+import DmButton from '../DmButton';
+import DmChip from '../DmChip';
+import {
+  Backdrop,
+  Button,
+  Chip,
+  CircularProgress,
+  InputAdornment,
+  Modal,
+  Typography,
+} from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+
+function DmSearchModal({
+  isSearchModalOpen,
+  setIsSearchModalOpen,
+  searchColumns,
+  selectLinkedUserClick,
+  isMobile,
+  modalTitle,
+  specificColumn,
+  sortField,
+  isSelect,
+  fetchRows,
+  isDisabled,
+  loading,
+}) {
+  const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [rowCount, setRowCount] = useState(0);
+
+  const [searchText, setSearchText] = useState('');
+  const [selectedHeader, setSelectedHeader] = useState(specificColumn);
+  const [selectionModel, setSelectionModel] = useState([]);
+  const [selectedRowsMap, setSelectedRowsMap] = useState({});
+
+  const columns = [
+    ...(isSelect
+      ? [
+          {
+            field: 'select',
+            headerName: '',
+            width: 50,
+            sortable: false,
+            filterable: false,
+            disableColumnMenu: true,
+            renderCell: (params) => (
+              <input
+                type="checkbox"
+                checked={selectionModel.includes(params.row.recId)}
+                onChange={(e) => {
+                  const recId = params.row.recId;
+                  if (e.target.checked) {
+                    setSelectionModel((prev) => [...prev, recId]);
+                    setSelectedRowsMap((prev) => ({
+                      ...prev,
+                      [recId]: params.row,
+                    }));
+                  } else {
+                    setSelectionModel((prev) =>
+                      prev.filter((id) => id !== recId)
+                    );
+                    setSelectedRowsMap((prev) => {
+                      const updated = { ...prev };
+                      delete updated[recId];
+                      return updated;
+                    });
+                  }
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...searchColumns.map((col) => ({
+      ...col,
+      headerClassName: col.field === selectedHeader ? 'selected-header' : '',
+    })),
+  ];
+
+  useEffect(() => {
+    if (isSearchModalOpen) {
+      loadData();
+    }
+  }, [searchText, page, pageSize, isSearchModalOpen]);
+
+  useEffect(() => {
+    if (isSearchModalOpen) {
+      setPage(0);
+    }
+  }, [isSearchModalOpen]);
+
+  const loadData = async () => {
+    // if (!fetchRows) return;
+
+    try {
+      const payload = {
+        sort: [{ field: 'docId', order: 'desc' }],
+        filters: [
+          {
+            field: selectedHeader|| specificColumn,
+            value: searchText,
+            operator: 'beginswith',
+            datatype: selectedHeader === specificColumn ? 'date' : 'string',
+          },
+        ],
+        page: page,
+        size: pageSize,
+      };
+
+      const response = await fetchRows(payload);
+      setRows(response?.data || []);
+      setRowCount(response?.totalCount || 0);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  };
+
+  const handleColumnHeaderClick = (params) => {
+    console.log('Clicked column:', params.colDef);
+    setSelectedHeader(params.colDef.field);
+  };
+
+  const handleSelectClick = () => {
+    if (selectionModel.length > 0) {
+      const selectedRows = selectionModel.map((id) => selectedRowsMap[id]);
+      console.log('Selected rows:', selectedRows);
+      selectLinkedUserClick(selectedRows);
+      setIsSearchModalOpen(false);
+      setSelectionModel([]);
+      setSelectedRowsMap({});
+    }
+  };
+
+  // Get selected order numbers
+  const selectedOrderNos = Object.values(selectedRowsMap).map(
+    (row) => row.orderNo
+  );
+
+  return (
+    <Modal
+      open={isSearchModalOpen}
+      onClose={() => {
+        setIsSearchModalOpen(false);
+        setSelectionModel([]);
+        setSelectedRowsMap({});
+      }}
+      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <DmBox
+        sx={{
+          p: 2,
+          bgcolor: 'background.paper',
+          width: '80%',
+          margin: 'auto',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          borderRadius: '16px',
+          boxShadow: 24,
+        }}
+      >
+        <Typography variant="h6" gutterBottom>
+          {modalTitle}
+        </Typography>
+
+        
+
+        <DmTextfield
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder={`Search ${modalTitle}...`}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2 }}
+        />
+
+        <div style={{ height: 400, width: '100%' }}>
+          {loading && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                zIndex: 1,
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+                background: 'transparent',
+              }}
+            >
+              <CircularProgress size={40} />
+            </div>
+          )}
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            getRowId={(row) => row.recId}
+            pagination
+            paginationModel={{ page, pageSize }}
+            onPaginationModelChange={(model) => {
+              if (model.pageSize !== pageSize) {
+                setPage(0);
+                setPageSize(model.pageSize);
+              } else {
+                setPage(model.page);
+              }
+            }}
+            paginationMode="server"
+            rowCount={rowCount}
+            pageSizeOptions={[10,20, 30]}
+            getRowClassName={(params) => {
+              return params.indexRelativeToCurrentPage % 2 === 0
+                ? 'even-row'
+                : 'odd-row';
+            }}
+            onColumnHeaderClick={handleColumnHeaderClick}
+            onRowClick={(params) => {
+              if (!isSelect) {
+                console.log('Selected Row:', params.row);
+                selectLinkedUserClick([params.row]);
+                setIsSearchModalOpen(false);
+              }
+            }}
+            rowHeight={40}
+            columnHeaderHeight={35}
+            sx={{
+              borderTop: 'none',
+              borderRight: 'none',
+              borderLeft: 'none',
+              borderRadius: 0,
+              '& .MuiDataGrid-columnHeader': {
+                borderBottom: '1px solid #ccc',
+                bgcolor: 'primary.main',
+                color: 'text.secondary',
+              },
+              '& .MuiDataGrid-columnHeaderTitle': {
+                fontWeight: 'bold',
+                fontSize: 10,
+              },
+              '& .selected-header': {
+                backgroundColor: '#436775',
+              },
+              '& .MuiDataGrid-cell': {
+                fontSize: 10,
+                display: 'flex',
+                alignItems: 'center',
+                borderColor: 'transparent !important',
+                cursor: 'pointer',
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: '#F2F6F7',
+              },
+              '& .even-row': {
+                backgroundColor: '#fff',
+              },
+              '& .odd-row': {
+                backgroundColor: '#fbfbfb',
+              },
+              '& .MuiDataGrid-footerContainer': {
+                minHeight: 40,
+                maxHeight: 40,
+                fontSize: 8,
+                display: 'flex',
+                alignItems: 'center',
+              },
+              '& .MuiTablePagination-root': {
+                fontSize: 10,
+                maxHeight: 'none',
+              },
+              '& .MuiTablePagination-displayedRows, & .MuiTablePagination-selectLabel':
+                {
+                  fontSize: 10,
+                },
+              '& .MuiTablePagination-select': {
+                fontSize: 10,
+                padding: '2px 8px !important',
+                minHeight: '20px',
+              },
+              '& .MuiSvgIcon-root': {
+                fontSize: 14,
+              },
+              '& .MuiDataGrid-columnSeparator': {
+                display: 'none !important',
+              },
+              '& .MuiDataGrid-columnHeaders': {
+                borderRight: 'none !important',
+              },
+            }}
+            disableColumnFilter
+            disableColumnMenu
+            disableColumnSelector
+            disableColumnResize
+            disableColumnSorting
+            disableRowSelectionOnClick
+          />
+        </div>
+
+        {isSelect && (
+          <DmBox
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mt: 2,
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+            }}
+          >
+            <DmButton
+              variant="contained"
+              onClick={handleSelectClick}
+              disabled={selectionModel.length === 0}
+              sx={{ width: '40%' }}
+            >
+              Select ({selectionModel.length})
+            </DmButton>
+
+            {selectedOrderNos.map((orderNo, index) => (
+              <DmChip
+                key={index}
+                label={orderNo}
+                size="small"
+                sx={{
+                  backgroundColor: 'primary.main',
+                  color: 'text.secondary',
+                  ml: 2,
+                  mb: 1,
+                  mt: 2,
+                }}
+              />
+            ))}
+          </DmBox>
+        )}
+      </DmBox>
+    </Modal>
+  );
+}
+
+export default DmSearchModal;

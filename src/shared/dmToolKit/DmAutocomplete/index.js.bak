@@ -1,0 +1,173 @@
+import React from 'react';
+import {
+  Autocomplete,
+  FormControl,
+  FormLabel,
+  Box,
+  TextField,
+} from '@mui/material';
+import styles from '../../shared.module.css';
+import { useThemeMode } from '../../../../../shared/src/lib/context/ThemeContext';
+
+const DmAutocomplete = ({
+  label,
+  name,
+  size = 'small',
+  options,
+  getOptionLabel,
+  value,
+  onChange,
+  renderInput,
+  required,
+  sx = {},
+  disabled,
+  clearIcon,
+  error,
+  multiple,
+  disableCloseOnSelect,
+  isOptionEqualToValue,
+  renderOption,
+  fullWidth = true,
+  showFormLabel = true,
+  variantMode = 'contained',
+}) => {
+  const { mode } = useThemeMode();
+
+  // Class mappings for light/dark mode
+  const rootClass =
+    mode === 'light'
+      ? styles.dmAutocompleteRootLight
+      : styles.dmAutocompleteRootDark;
+  const disabledClass =
+    mode === 'light'
+      ? styles.dmAutocompleteDisabledLight
+      : styles.dmAutocompleteDisabledDark;
+  const labelClass =
+    mode === 'light' ? styles.dmLabelLight : styles.dmLabelDark;
+  const labelDisabledClass =
+    mode === 'light' ? styles.dmLabelDisabledLight : styles.dmLabelDisabledDark;
+  const inputClass =
+    mode === 'light' ? styles.dmInputLight : styles.dmInputDark;
+  const inputDisabledClass =
+    mode === 'light' ? styles.dmInputDisabledLight : styles.dmInputDisabledDark;
+
+  const containedAutocomplete = (
+    <Autocomplete
+      size={size}
+      options={options}
+      getOptionLabel={getOptionLabel}
+      value={value}
+      onChange={onChange}
+      renderInput={(params) =>
+        renderInput({
+          ...params,
+          label: variantMode === 'contained' ? label : undefined,
+          InputProps: {
+            ...params.InputProps,
+            classes: {
+              root: rootClass,
+              disabled: disabledClass,
+            },
+            style: {
+              minHeight: '36px',
+              padding: '0 !important',
+              backgroundColor: 'transparent',
+              fontSize: '14px',
+            },
+          },
+          inputProps: {
+            ...params.inputProps,
+            className: `${inputClass} ${disabled ? inputDisabledClass : ''}`,
+            style: {
+              padding: '6px 8px',
+              fontSize: '14px',
+              fontWeight: 600,
+              lineHeight: 1.2,
+            },
+          },
+          InputLabelProps: {
+            classes: {
+              root: labelClass,
+              disabled: labelDisabledClass,
+            },
+            style: {
+              fontSize: '14px',
+            },
+          },
+          required,
+          error,
+          disabled,
+        })
+      }
+      required={required}
+      disabled={disabled}
+      clearIcon={clearIcon}
+      error={error}
+      multiple={multiple}
+      disableCloseOnSelect={disableCloseOnSelect}
+      isOptionEqualToValue={isOptionEqualToValue}
+      renderOption={renderOption}
+      fullWidth={fullWidth}
+      sx={{
+        ...sx,
+        '& .MuiAutocomplete-inputRoot': {
+          padding: '0px !important',
+          minHeight: '36px !important',
+          alignItems: 'center',
+        },
+        '& .MuiOutlinedInput-root': {
+          minHeight: '36px !important',
+          padding: '0px !important',
+        },
+      }}
+      componentsProps={{
+        paper: {
+          sx: {
+            '& .MuiAutocomplete-noOptions': {
+              color: 'text.primary',
+            },
+          },
+        },
+      }}
+    />
+  );
+
+  if (variantMode === 'contained') {
+    return containedAutocomplete;
+  }
+
+  return (
+    <FormControl fullWidth={fullWidth} disabled={disabled} sx={{ ...sx }}>
+      {showFormLabel && label && (
+        <FormLabel
+          htmlFor={name}
+          sx={{
+            fontSize: '14px',
+            mb: 0.5,
+            color: 'text.primary',
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+          className={disabled ? labelDisabledClass : labelClass}
+        >
+          {label}
+          {required && (
+            <Box
+              component="span"
+              sx={{
+                color: disabled ? 'text.disabled' : 'error.main',
+                ml: 0.5,
+              }}
+            >
+              *
+            </Box>
+          )}
+        </FormLabel>
+      )}
+
+      {containedAutocomplete}
+    </FormControl>
+  );
+};
+
+export default DmAutocomplete;
